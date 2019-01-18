@@ -32,7 +32,7 @@ When all the conditions are met, the bot would look for [available](https://gith
 
 Command: `?upvote content_url`
 
-Example: `?downvote https://steemit.com/utopian-io/@reazuliqbal/automatically-follow-on-flag-sfr-approved-flags`
+Example: `?upvote https://steemit.com/utopian-io/@reazuliqbal/automatically-follow-on-flag-sfr-approved-flags`
 
 Like downvote, this is also a restricted command for the admins. The trail would only process upvote if the content has negative rshares and bring it to zero rshares. This is used to counteract retaliatory flags from the abusers.
 
