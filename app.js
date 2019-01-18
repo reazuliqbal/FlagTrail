@@ -148,7 +148,7 @@ mongoose.connect(config.MONGODB, {
               if (rshares > 0) {
                 const [sfrComment] = await findSFRComment(client, author, permlink, category);
 
-                if (sfrComment) {
+                if (sfrComment && sfrComment.category !== undefined) {
                   // Getting voters list and their combined rshares
                   const {
                     voters, total,
@@ -167,6 +167,8 @@ mongoose.connect(config.MONGODB, {
                   } else {
                     message.reply('**ALERT:** No downvoters available at this moment for this content.');
                   }
+                } else if (sfrComment && sfrComment.category === undefined) {
+                  message.reply('**ERROR:** SteemFlagRewards approval category is not present in the comment.');
                 } else {
                   message.reply('**ERROR:** Cannot downvote. SteemFlagRewards approval comment is not present in the content.');
                 }
