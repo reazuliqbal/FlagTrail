@@ -103,12 +103,13 @@ const getVoters = async (client, targetRshares, author, permlink, vests = 0, typ
   const qualifiedVoters = await User.find({
     authorized: true,
     banned: false,
+    paused: false,
     name: { $nin: alreadyVoted },
     max_vests: { $gte: vests },
     $expr: { $gte: ['$voting_mana', '$mana_limit'] },
   })
     .sort({ vote_value: (type === 'upvote') ? -1 : 1 })
-    .select('-_id name vote_value max_weight vests voting_mana');
+    .select('-_id name vote_value max_weight vests voting_mana comment');
 
   // Processing the raw list and determining how much the vote weight should be
   // for each voters as long as the target rshares are not filled
@@ -127,6 +128,7 @@ const getVoters = async (client, targetRshares, author, permlink, vests = 0, typ
       acc.voters.push({
         name: cur.name,
         weight,
+        comment: cur.comment,
       });
     }
     return acc;
@@ -203,15 +205,18 @@ const processVotes = async (client, author, permlink, voters, type = 'upvote', s
       qualifiedVoters.forEach((voter) => {
         const commentPermlink = `re-${author.replace(/\./g, '')}-${permlink.replace(/(-\d{8}t\d{9}z)/g, '')}-${new Date().toISOString().replace(/[^a-zA-Z0-9]+/g, '').toLowerCase()}`;
 
-        ops.push(['comment', {
-          parent_author: sfrComment.author,
-          parent_permlink: sfrComment.permlink,
-          author: voter.name,
-          permlink: commentPermlink,
-          title: '',
-          body: `Follow on flag for ${sfrComment.category} @steemflagrewards.`,
-          json_metadata: JSON.stringify({ app: 'flagtrail/1.0' }),
-        }]);
+        // If voter wants to comment
+        if (voter.comment) {
+          ops.push(['comment', {
+            parent_author: sfrComment.author,
+            parent_permlink: sfrComment.permlink,
+            author: voter.name,
+            permlink: commentPermlink,
+            title: '',
+            body: `Follow on flag for ${sfrComment.category} @steemflagrewards.`,
+            json_metadata: JSON.stringify({ app: 'flagtrail/1.0' }),
+          }]);
+        }
       });
     }
 

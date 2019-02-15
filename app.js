@@ -237,6 +237,46 @@ mongoose.connect(config.MONGODB, {
         break;
       }
 
+      // Pause Command
+      case 'set': {
+        let [username, prop, boolean] = splitMessage.slice(1);
+
+        if (!username) {
+          message.reply('**ERROR:** Username is required.');
+        } else if (!['pause', 'comment'].includes(prop)) {
+          message.reply('**ERROR:** Unrecognized settings property.');
+        } else {
+          username = username.toLowerCase();
+          prop = prop.toLowerCase();
+          // Converting string to boolean, if sting is true output is true else it is false
+          boolean = boolean.toLowerCase() === 'true';
+
+          const user = await User.findOne({ name: username });
+
+          if (user) {
+            // Allowing admin and the registered user to update the account
+            if (message.member.roles.some(r => config.ADMIN_ROLES.includes(r.name))
+              || user.discordId === message.author.id) {
+              if (prop === 'pause') {
+                user.paused = boolean;
+              } else if (prop === 'comment') {
+                user.comment = boolean;
+              }
+
+              await user.save()
+                .then(() => message.channel.send(`Username \`${username}\` has been updated.`))
+                .catch(() => message.channel.send(`**ERROR**: There was a problem in updating user \`${username}\`.`));
+            } else {
+              message.reply(`**ERROR:** You do not have permission to update user \`${username}\`.`);
+            }
+          } else {
+            message.reply(`**ERROR:** Username \`${username}\` is not registered.`);
+          }
+        }
+
+        break;
+      }
+
       case 'help': {
         const help = stripIndents`
         **Available Commands:**
@@ -255,6 +295,10 @@ mongoose.connect(config.MONGODB, {
 
         **\`${config.PREFIX}delete username\`**
           *username - Registered Steem username.*
+
+        **\`${config.PREFIX}set prop boolean\`**
+          *prop - It can be pause or comment.*
+          *boolean - Set true to pause/comment or false to resume/no comment.*
         `;
 
         message.channel.send(help);
