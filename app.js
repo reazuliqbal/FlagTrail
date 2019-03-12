@@ -9,6 +9,7 @@ const {
   findSFRComment,
   getContent,
   getSbdPerRshares,
+  getStats,
   getVoters,
   isURL,
   processVotes,
@@ -277,6 +278,22 @@ mongoose.connect(config.MONGODB, {
         break;
       }
 
+      case 'stats': {
+        const stats = await getStats();
+
+        const richembed = new Discord.RichEmbed()
+          .setTitle('FlagTrail Statistics')
+          .setColor(0xef5285)
+          .setThumbnail(bot.user.avatarURL)
+          .addField('Users', stats.users, true)
+          .addField('Collective SP', stats.totalSP, true)
+          .addField('Vote Value', `$${stats.voteValue.toFixed(3)}`, true);
+
+        message.channel.send(richembed);
+
+        break;
+      }
+
       case 'help': {
         const help = stripIndents`
         **Available Commands:**
@@ -299,6 +316,9 @@ mongoose.connect(config.MONGODB, {
         **\`${config.PREFIX}set prop boolean\`**
           *prop - It can be pause or comment.*
           *boolean - Set true to pause/comment or false to resume/no comment.*
+
+        **\`${config.PREFIX}stats\`**
+          *Displays overall statistics of the trail.*
         `;
 
         message.channel.send(help);

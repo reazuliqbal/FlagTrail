@@ -69,6 +69,9 @@ const rsharesToVotePct = (rshares, vests, votingMana = STEEM_100_PERCENT) => {
 // Converts STEEM POWER to VESTS
 const convertSPToVests = sp => (getVestingSharePrice(globalProperties)).convert({ amount: sp, symbol: 'STEEM' });
 
+// Converts STEEM POWER to VESTS
+const convertVestsToSP = vests => (getVestingSharePrice(globalProperties)).convert({ amount: vests, symbol: 'VESTS' });
+
 // Updates registared users mana, vote value, vests, authotity status every 5 minutes
 const updateVPMana = async (client) => {
   const users = await User.find({});
@@ -222,7 +225,7 @@ const processVotes = async (client, author, permlink, voters, type = 'upvote', s
 
     client.broadcast.sendOperations(ops, PrivateKey.from(config.TRAIL_WIF))
       .then((r) => {
-        resolve(`${(type === 'downvote') ? 'Downvote' : 'Upvote'} request has been processed. You can checkout the transaction here <https://steemd.com/tx/${r.id}>.`);
+        resolve(`${(type === 'downvote') ? 'Downvote' : 'Upvote'} request has been processed. You can check out the transaction here <https://steemd.com/tx/${r.id}>.`);
       })
       .catch((e) => {
         reject(e.message);
@@ -231,6 +234,25 @@ const processVotes = async (client, author, permlink, voters, type = 'upvote', s
     resolve('No voters available at this moment for this content.');
   }
 });
+
+const getStats = async () => {
+  const [stats] = await User.aggregate([
+    {
+      $group: {
+        _id: {},
+        vests: { $sum: '$vests' },
+        voteValue: { $sum: '$vote_value' },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  return {
+    voteValue: stats.voteValue * getSbdPerRshares(),
+    totalSP: convertVestsToSP(stats.vests),
+    users: stats.count,
+  };
+};
 
 // Returns true if supplied text is a URL
 const isURL = (url) => {
@@ -241,9 +263,11 @@ const isURL = (url) => {
 
 module.exports = {
   convertSPToVests,
+  convertVestsToSP,
   findSFRComment,
   getContent,
   getSbdPerRshares,
+  getStats,
   getVoters,
   getVoteValue,
   isURL,
