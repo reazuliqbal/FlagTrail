@@ -101,18 +101,24 @@ const getVoters = async (client, targetRshares, author, permlink, vests = 0, typ
   const alreadyVoted = (await client.database.call('get_active_votes', [author, permlink]))
     .map(v => v.voter);
 
-  // In case of downvote, low vote value voters are selected first
-  // In case of upvote hight vote value voters are selected first
-  const qualifiedVoters = await User.find({
+  const query = {
     authorized: true,
     banned: false,
-    paused: false,
+    'settings.paused': false,
     name: { $nin: alreadyVoted },
     max_vests: { $gte: vests },
     $expr: { $gte: ['$voting_mana', '$mana_limit'] },
-  })
+  };
+
+  // Selecting voters based on their role preference
+  if (type === 'downvote') query['settings.heal'] = { $in: ['off', 'on'] };
+  if (type === 'upvote') query['settings.heal'] = { $in: ['on', 'only'] };
+
+  // In case of downvote, low vote value voters are selected first
+  // In case of upvote hight vote value voters are selected first
+  const qualifiedVoters = await User.find(query)
     .sort({ vote_value: (type === 'upvote') ? -1 : 1 })
-    .select('-_id name vote_value max_weight vests voting_mana comment');
+    .select('-_id name vote_value max_weight vests voting_mana settings');
 
   // Processing the raw list and determining how much the vote weight should be
   // for each voters as long as the target rshares are not filled
@@ -131,7 +137,7 @@ const getVoters = async (client, targetRshares, author, permlink, vests = 0, typ
       acc.voters.push({
         name: cur.name,
         weight,
-        comment: cur.comment,
+        comment: cur.settings.comment,
       });
     }
     return acc;

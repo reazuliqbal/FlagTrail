@@ -28,13 +28,20 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
-  paused: {
-    type: Boolean,
-    default: false,
-  },
-  comment: {
-    type: Boolean,
-    default: true,
+  settings: {
+    paused: {
+      type: Boolean,
+      default: false,
+    },
+    comment: {
+      type: Boolean,
+      default: true,
+    },
+    heal: {
+      type: String,
+      enum: ['on', 'off', 'only'],
+      default: 'on',
+    },
   },
   banned: {
     type: Boolean,
