@@ -69,6 +69,9 @@ const rsharesToVotePct = (rshares, vests, votingMana = STEEM_100_PERCENT) => {
 // Converts STEEM POWER to VESTS
 const convertSPToVests = sp => (getVestingSharePrice(globalProperties)).convert({ amount: sp, symbol: 'STEEM' });
 
+// Converts STEEM POWER to VESTS
+const convertVestsToSP = vests => (getVestingSharePrice(globalProperties)).convert({ amount: vests, symbol: 'VESTS' });
+
 // Updates registared users mana, vote value, vests, authotity status every 5 minutes
 const updateVPMana = async (client) => {
   const users = await User.find({});
@@ -98,17 +101,24 @@ const getVoters = async (client, targetRshares, author, permlink, vests = 0, typ
   const alreadyVoted = (await client.database.call('get_active_votes', [author, permlink]))
     .map(v => v.voter);
 
-  // In case of downvote, low vote value voters are selected first
-  // In case of upvote hight vote value voters are selected first
-  const qualifiedVoters = await User.find({
+  const query = {
     authorized: true,
     banned: false,
+    'settings.paused': false,
     name: { $nin: alreadyVoted },
     max_vests: { $gte: vests },
     $expr: { $gte: ['$voting_mana', '$mana_limit'] },
-  })
+  };
+
+  // Selecting voters based on their role preference
+  if (type === 'downvote') query['settings.heal'] = { $in: ['off', 'on'] };
+  if (type === 'upvote') query['settings.heal'] = { $in: ['on', 'only'] };
+
+  // In case of downvote, low vote value voters are selected first
+  // In case of upvote hight vote value voters are selected first
+  const qualifiedVoters = await User.find(query)
     .sort({ vote_value: (type === 'upvote') ? -1 : 1 })
-    .select('-_id name vote_value max_weight vests voting_mana');
+    .select('-_id name vote_value max_weight vests voting_mana settings');
 
   // Processing the raw list and determining how much the vote weight should be
   // for each voters as long as the target rshares are not filled
@@ -127,6 +137,7 @@ const getVoters = async (client, targetRshares, author, permlink, vests = 0, typ
       acc.voters.push({
         name: cur.name,
         weight,
+        comment: cur.settings.comment,
       });
     }
     return acc;
@@ -203,21 +214,24 @@ const processVotes = async (client, author, permlink, voters, type = 'upvote', s
       qualifiedVoters.forEach((voter) => {
         const commentPermlink = `re-${author.replace(/\./g, '')}-${permlink.replace(/(-\d{8}t\d{9}z)/g, '')}-${new Date().toISOString().replace(/[^a-zA-Z0-9]+/g, '').toLowerCase()}`;
 
-        ops.push(['comment', {
-          parent_author: sfrComment.author,
-          parent_permlink: sfrComment.permlink,
-          author: voter.name,
-          permlink: commentPermlink,
-          title: '',
-          body: `Follow on flag for ${sfrComment.category} @steemflagrewards.`,
-          json_metadata: JSON.stringify({ app: 'flagtrail/1.0' }),
-        }]);
+        // If voter wants to comment
+        if (voter.comment) {
+          ops.push(['comment', {
+            parent_author: sfrComment.author,
+            parent_permlink: sfrComment.permlink,
+            author: voter.name,
+            permlink: commentPermlink,
+            title: '',
+            body: `Follow on flag for ${sfrComment.category} @steemflagrewards.`,
+            json_metadata: JSON.stringify({ app: 'flagtrail/1.0' }),
+          }]);
+        }
       });
     }
 
     client.broadcast.sendOperations(ops, PrivateKey.from(config.TRAIL_WIF))
       .then((r) => {
-        resolve(`${(type === 'downvote') ? 'Downvote' : 'Upvote'} request has been processed. You can checkout the transaction here <https://steemd.com/tx/${r.id}>.`);
+        resolve(`${(type === 'downvote') ? 'Downvote' : 'Upvote'} request has been processed. You can check out the transaction here <https://steemd.com/tx/${r.id}>.`);
       })
       .catch((e) => {
         reject(e.message);
@@ -226,6 +240,25 @@ const processVotes = async (client, author, permlink, voters, type = 'upvote', s
     resolve('No voters available at this moment for this content.');
   }
 });
+
+const getStats = async () => {
+  const [stats] = await User.aggregate([
+    {
+      $group: {
+        _id: {},
+        vests: { $sum: '$vests' },
+        voteValue: { $sum: '$vote_value' },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  return {
+    voteValue: stats.voteValue * getSbdPerRshares(),
+    totalSP: convertVestsToSP(stats.vests),
+    users: stats.count,
+  };
+};
 
 // Returns true if supplied text is a URL
 const isURL = (url) => {
@@ -236,9 +269,11 @@ const isURL = (url) => {
 
 module.exports = {
   convertSPToVests,
+  convertVestsToSP,
   findSFRComment,
   getContent,
   getSbdPerRshares,
+  getStats,
   getVoters,
   getVoteValue,
   isURL,

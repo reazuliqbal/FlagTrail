@@ -9,6 +9,7 @@ const {
   findSFRComment,
   getContent,
   getSbdPerRshares,
+  getStats,
   getVoters,
   isURL,
   processVotes,
@@ -105,7 +106,8 @@ mongoose.connect(config.MONGODB, {
 
           if (user) {
             // Allowing admin and registered user to remove his account
-            if (message.member.roles.some(r => config.ADMIN_ROLES.includes(r.name))
+            if ((message.guild
+              && message.member.roles.some(r => config.ADMIN_ROLES.includes(r.name)))
               || user.discordId === message.author.id) {
               User.deleteOne({ name: username })
                 .then(() => {
@@ -131,7 +133,8 @@ mongoose.connect(config.MONGODB, {
           message.reply('**ERROR:** URL is not valid.');
         } else {
           // Checking if the message author has the privilege
-          if (!message.member.roles.some(r => config.ADMIN_ROLES.includes(r.name))) {
+          if (!message.guild
+            || !message.member.roles.some(r => config.ADMIN_ROLES.includes(r.name))) {
             return;
           }
 
@@ -148,7 +151,7 @@ mongoose.connect(config.MONGODB, {
               if (rshares > 0) {
                 const [sfrComment] = await findSFRComment(client, author, permlink, category);
 
-                if (sfrComment) {
+                if (sfrComment && sfrComment.category !== undefined) {
                   // Getting voters list and their combined rshares
                   const {
                     voters, total,
@@ -167,6 +170,8 @@ mongoose.connect(config.MONGODB, {
                   } else {
                     message.reply('**ALERT:** No downvoters available at this moment for this content.');
                   }
+                } else if (sfrComment && sfrComment.category === undefined) {
+                  message.reply('**ERROR:** SteemFlagRewards approval category is not present in the comment.');
                 } else {
                   message.reply('**ERROR:** Cannot downvote. SteemFlagRewards approval comment is not present in the content.');
                 }
@@ -190,7 +195,8 @@ mongoose.connect(config.MONGODB, {
           message.reply('URL is not valid.');
         } else {
           // Checking if the message author has the privilege
-          if (!message.member.roles.some(r => config.ADMIN_ROLES.includes(r.name))) {
+          if (!message.guild
+            || !message.member.roles.some(r => config.ADMIN_ROLES.includes(r.name))) {
             return;
           }
 
@@ -235,6 +241,81 @@ mongoose.connect(config.MONGODB, {
         break;
       }
 
+      // Pause Command
+      case 'set': {
+        let [username, prop, value] = splitMessage.slice(1);
+
+        if (!username) {
+          message.reply('**ERROR:** Username is required.');
+        } else if (!['pause', 'comment', 'heal'].includes(prop)) {
+          message.reply('**ERROR:** Unrecognized settings property.');
+        } else if (prop === 'heal' && !['on', 'off', 'only'].includes(value)) {
+          message.reply('**ERROR**: Property `heal` can only have one of `on, off, or only` as value.');
+        } else if (!value) {
+          message.reply(`**ERROR**: A settings value is required for \`${prop}\`.`);
+        } else {
+          username = username.toLowerCase();
+          prop = prop.toLowerCase();
+
+          if (prop !== 'heal') {
+          // Converting string to boolean, if sting is true output is true else it is false
+            value = value.toLowerCase() === 'true';
+          } else {
+            value = value.toLowerCase();
+          }
+
+          const user = await User.findOne({ name: username });
+
+          if (user) {
+            // Allowing admin and the registered user to update the account
+            if ((message.guild
+              && message.member.roles.some(r => config.ADMIN_ROLES.includes(r.name)))
+              || user.discordId === message.author.id) {
+              if (prop === 'pause') {
+                user.settings.paused = value;
+              } else if (prop === 'comment') {
+                user.settings.comment = value;
+              } else if (prop === 'heal') {
+                user.settings.heal = value;
+              }
+
+              await user.save()
+                .then(() => message.channel.send(`Username \`${username}\` has been updated.`))
+                .catch(() => message.channel.send(`**ERROR**: There was a problem in updating user \`${username}\`.`));
+            } else {
+              message.reply(`**ERROR:** You do not have permission to update user \`${username}\`.`);
+            }
+          } else {
+            message.reply(`**ERROR:** Username \`${username}\` is not registered.`);
+          }
+        }
+
+        break;
+      }
+
+      case 'stats': {
+        const stats = await getStats();
+
+        const richembed = new Discord.RichEmbed()
+          .setTitle('FlagTrail Statistics')
+          .setColor(0xef5285)
+          .setThumbnail(bot.user.avatarURL)
+          .addField('Users', stats.users, true)
+          .addField('Collective SP', stats.totalSP, true)
+          .addField('Vote Value', `$${stats.voteValue.toFixed(3)}`, true);
+
+        message.channel.send(richembed);
+
+        break;
+      }
+
+      case 'private': {
+        message.delete();
+        message.member.send('Hey, how can I help you?');
+
+        break;
+      }
+
       case 'help': {
         const help = stripIndents`
         **Available Commands:**
@@ -253,6 +334,16 @@ mongoose.connect(config.MONGODB, {
 
         **\`${config.PREFIX}delete username\`**
           *username - Registered Steem username.*
+
+        **\`${config.PREFIX}set prop value\`**
+          *prop - It can be pause/comment/heal.*
+          *value - Set to true to pause/comment or false to resume/no comment. Set to on, off, or only for heal.*
+
+        **\`${config.PREFIX}stats\`**
+          *Displays overall statistics of the trail.*
+
+        **\`${config.PREFIX}private\`**
+          *To privately add/remove accounts, and manage associated settings.*
         `;
 
         message.channel.send(help);
@@ -268,7 +359,7 @@ mongoose.connect(config.MONGODB, {
 })();
 
 process.on('uncaughtException', (err) => {
-  console.log(err);
+  console.log(err.message);
 });
 
 process.on('SIGINT', () => {
