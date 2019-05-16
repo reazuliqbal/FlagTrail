@@ -258,7 +258,7 @@ mongoose.connect(config.MONGODB, {
           prop = prop.toLowerCase();
 
           if (prop !== 'heal') {
-          // Converting string to boolean, if sting is true output is true else it is false
+            // Converting string to boolean, if sting is true output is true else it is false
             value = value.toLowerCase() === 'true';
           } else {
             value = value.toLowerCase();
@@ -335,7 +335,8 @@ mongoose.connect(config.MONGODB, {
         **\`${config.PREFIX}delete username\`**
           *username - Registered Steem username.*
 
-        **\`${config.PREFIX}set prop value\`**
+        **\`${config.PREFIX}set username prop value\`**
+          *username - Registered Steem username.*
           *prop - It can be pause/comment/heal.*
           *value - Set to true to pause/comment or false to resume/no comment. Set to on, off, or only for heal.*
 
