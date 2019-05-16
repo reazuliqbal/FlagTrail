@@ -127,7 +127,8 @@ mongoose.connect(config.MONGODB, {
 
       // Downvote Command
       case 'downvote': {
-        const [url] = splitMessage.slice(1);
+        let [url] = splitMessage.slice(1);
+        url = url.replace(/<|>/g, '');
 
         if (!isURL(url)) {
           message.reply('**ERROR:** URL is not valid.');
@@ -189,7 +190,8 @@ mongoose.connect(config.MONGODB, {
 
       // Upvote Command
       case 'upvote': {
-        const [url] = splitMessage.slice(1);
+        let [url] = splitMessage.slice(1);
+        url = url.replace(/<|>/g, '');
 
         if (!isURL(url)) {
           message.reply('URL is not valid.');
