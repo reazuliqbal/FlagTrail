@@ -115,9 +115,12 @@ const getVoters = async (client, targetRshares, author, permlink, vests = 0, typ
   if (type === 'upvote') query['settings.heal'] = { $in: ['on', 'only'] };
 
   // In case of downvote, low vote value voters are selected first
-  // In case of upvote hight vote value voters are selected first
+  // In case of upvote heal only/on high vote value voters are selected first
+  let sort = { vote_value: 1 };
+  if (type === 'upvote') sort = { 'settings.heal': -1, vote_value: -1 };
+
   const qualifiedVoters = await User.find(query)
-    .sort({ vote_value: (type === 'upvote') ? -1 : 1 })
+    .sort(sort)
     .select('-_id name vote_value max_weight vests voting_mana settings');
 
   // Processing the raw list and determining how much the vote weight should be
