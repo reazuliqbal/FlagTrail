@@ -181,7 +181,7 @@ const findSFRComment = async (client, author, permlink, category) => {
   try {
     const comments = await client.database.call('get_state', [`${category}/@${author}/${permlink}`]);
     const allReplies = Object.values(comments.content);
-    const mainContent = allReplies.find(r => (r.author === author && r.permlink === permlink));
+    const mainContent = await client.database.call('get_content', [author, permlink]);
     // SFR comment is always 3rd level comment from the original content
     const sfrComment = allReplies.filter(r => r.depth === (mainContent.depth + 2) && r.author === 'steemflagrewards')
       .map((r) => {
@@ -196,7 +196,7 @@ const findSFRComment = async (client, author, permlink, category) => {
 };
 
 // Processing and broadcasting downvote/upvotes for the voter list
-const processVotes = async (client, author, permlink, voters, type = 'upvote', sfrComment = {}) => new Promise(async (resolve, reject) => {
+const processVotes = async (client, author, permlink, voters, type = 'upvote') => new Promise(async (resolve, reject) => {
   const alreadyVoted = await client.database.call('get_active_votes', [author, permlink]);
   const qualifiedVoters = voters.filter(voter => !alreadyVoted.some(v => v.voter === voter.name));
 
@@ -211,26 +211,6 @@ const processVotes = async (client, author, permlink, voters, type = 'upvote', s
         weight: (type === 'downvote') ? voter.weight * -1 : voter.weight,
       }]);
     });
-
-    // Generating comment operations for downvotes
-    if (type === 'downvote' && sfrComment) {
-      qualifiedVoters.forEach((voter) => {
-        const commentPermlink = `re-${author.replace(/\./g, '')}-${permlink.replace(/(-\d{8}t\d{9}z)/g, '')}-${new Date().toISOString().replace(/[^a-zA-Z0-9]+/g, '').toLowerCase()}`;
-
-        // If voter wants to comment
-        if (voter.comment) {
-          ops.push(['comment', {
-            parent_author: sfrComment.author,
-            parent_permlink: sfrComment.permlink,
-            author: voter.name,
-            permlink: commentPermlink,
-            title: '',
-            body: `Follow on flag for ${sfrComment.category} @steemflagrewards.`,
-            json_metadata: JSON.stringify({ app: 'flagtrail/1.0' }),
-          }]);
-        }
-      });
-    }
 
     client.broadcast.sendOperations(ops, PrivateKey.from(config.TRAIL_WIF))
       .then((r) => {
