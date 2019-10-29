@@ -11,9 +11,11 @@ module.exports = {
   ADMIN_ROLES: ['FlagTrail Admin'],
   CATEGORIES: [
     'bid bot abuse',
+    'bid bot misuse',
     'collusive voting',
     'comment self-vote violation',
     'comment spam',
+    'contest abuse',
     'copy/paste',
     'failure to tag nsfw',
     'identity theft',
